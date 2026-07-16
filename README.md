@@ -2,6 +2,12 @@
 
 소규모 팀(3-5인)이 칸반 보드와 팀 채팅으로 업무 진행 상황을 한 화면에서 추적하는 Day 2 MVP 프로젝트입니다.
 
+## 스크린샷
+
+| 로그인 | 칸반 | 채팅 |
+|---|---|---|
+| ![로그인 화면](docs/screenshots/login.png) | ![칸반 화면](docs/screenshots/kanban.png) | ![채팅 화면](docs/screenshots/chat.png) |
+
 ## 기능
 
 - **인증**: 회원가입, 로그인, JWT(24h) 발급/검증, bcrypt 비밀번호 해시
