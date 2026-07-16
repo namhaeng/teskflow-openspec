@@ -15,7 +15,6 @@ class LoginRequest(BaseModel):
 class UserOut(BaseModel):
     id: int
     email: str
-    team_id: Optional[int] = None
 
 
 class AuthResponse(BaseModel):
@@ -36,12 +35,18 @@ class TeamOut(BaseModel):
     name: str
     invite_code: str
     owner_id: int
+    is_active: bool
+    role: Optional[str] = None
 
 
 class TeamPreviewOut(BaseModel):
     name: str
     member_count: int
     owner_email: str
+
+
+class TeamActiveUpdateRequest(BaseModel):
+    is_active: bool
 
 
 class MemberOut(BaseModel):

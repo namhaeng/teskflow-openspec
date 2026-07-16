@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Message
 from schemas import MessageCreateRequest, MessageOut
-from dependencies import get_current_user, require_team_member
+from dependencies import get_current_user, require_team_member, require_active_team_member
 from errors import too_long, not_found, not_owner
 
 router = APIRouter(tags=["messages"])
@@ -60,7 +60,7 @@ def create_message(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    require_team_member(team_id, current_user, db)
+    require_active_team_member(team_id, current_user, db)
     if len(payload.content) > MAX_MESSAGE_LENGTH:
         raise too_long(MAX_MESSAGE_LENGTH, len(payload.content))
 

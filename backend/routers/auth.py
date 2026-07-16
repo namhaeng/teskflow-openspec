@@ -26,7 +26,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     db.refresh(user)
 
     token = create_access_token(user.id)
-    return AuthResponse(token=token, user=UserOut(id=user.id, email=user.email, team_id=user.team_id))
+    return AuthResponse(token=token, user=UserOut(id=user.id, email=user.email))
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -36,7 +36,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         raise invalid_credentials()
 
     token = create_access_token(user.id)
-    return AuthResponse(token=token, user=UserOut(id=user.id, email=user.email, team_id=user.team_id))
+    return AuthResponse(token=token, user=UserOut(id=user.id, email=user.email))
 
 
 @router.post("/logout")
@@ -47,4 +47,4 @@ def logout(current_user: User = Depends(get_current_user)):
 
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
-    return UserOut(id=current_user.id, email=current_user.email, team_id=current_user.team_id)
+    return UserOut(id=current_user.id, email=current_user.email)

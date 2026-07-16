@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Index
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Index, Boolean
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -15,7 +15,6 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
@@ -26,7 +25,21 @@ class Team(Base):
     name = Column(String, nullable=False)
     invite_code = Column(String, unique=True, nullable=False, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class TeamMembership(Base):
+    __tablename__ = "team_memberships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String, nullable=False, default="member")  # owner | member
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+Index("ix_membership_user_team", TeamMembership.user_id, TeamMembership.team_id, unique=True)
 
 
 class Task(Base):

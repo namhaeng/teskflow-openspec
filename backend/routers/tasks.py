@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Task
 from schemas import TaskCreateRequest, TaskTitleUpdateRequest, TaskStatusUpdateRequest, TaskOut
-from dependencies import get_current_user, require_team_member
+from dependencies import get_current_user, require_team_member, require_active_team_member
 from errors import validation_error, not_found, forbidden
 
 router = APIRouter(tags=["tasks"])
@@ -48,7 +48,7 @@ def create_task(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    require_team_member(team_id, current_user, db)
+    require_active_team_member(team_id, current_user, db)
     if not (1 <= len(payload.title) <= 100):
         raise validation_error("제목은 1-100자여야 합니다")
 
@@ -65,11 +65,14 @@ def create_task(
     return _to_out(task)
 
 
-def _get_task_in_team(task_id: int, current_user: User, db: Session) -> Task:
+def _get_task_in_team(task_id: int, current_user: User, db: Session, active_required: bool = False) -> Task:
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise not_found()
-    require_team_member(task.team_id, current_user, db)
+    if active_required:
+        require_active_team_member(task.team_id, current_user, db)
+    else:
+        require_team_member(task.team_id, current_user, db)
     return task
 
 
@@ -86,7 +89,7 @@ def update_task_title(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    task = _get_task_in_team(task_id, current_user, db)
+    task = _get_task_in_team(task_id, current_user, db, active_required=True)
     if not (1 <= len(payload.title) <= 100):
         raise validation_error("제목은 1-100자여야 합니다")
     task.title = payload.title
@@ -104,7 +107,7 @@ def update_task_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    task = _get_task_in_team(task_id, current_user, db)
+    task = _get_task_in_team(task_id, current_user, db, active_required=True)
     if payload.status not in VALID_STATUSES:
         raise validation_error("status는 TODO, DOING, DONE 중 하나여야 합니다")
     task.status = payload.status
@@ -116,8 +119,8 @@ def update_task_status(
 
 @router.delete("/tasks/{task_id}")
 def delete_task(task_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    task = _get_task_in_team(task_id, current_user, db)
-    team = require_team_member(task.team_id, current_user, db)
+    task = _get_task_in_team(task_id, current_user, db, active_required=True)
+    team = require_active_team_member(task.team_id, current_user, db)
     if current_user.id != task.creator_id and current_user.id != team.owner_id:
         raise forbidden()
     db.delete(task)

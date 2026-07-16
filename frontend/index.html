@@ -5,54 +5,64 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TaskFlow - 로그인</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/vue@3.4.31/dist/vue.global.prod.js"></script>
 </head>
 <body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-fuchsia-500 via-purple-500 to-indigo-500">
-  <div class="w-full max-w-sm bg-white/95 backdrop-blur rounded-xl shadow-2xl p-6">
-    <div class="flex justify-center mb-4">
-      <span class="bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white px-4 py-2 rounded-full font-bold shadow">TaskFlow</span>
-    </div>
-    <h1 class="text-xl font-bold text-center mb-4">로그인</h1>
-    <form id="login-form" class="space-y-3">
-      <input id="email" type="email" required placeholder="이메일" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400" />
-      <input id="password" type="password" required placeholder="비밀번호" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400" />
-      <p id="error" class="text-red-600 text-sm hidden"></p>
-      <button type="submit" id="submit-btn" class="w-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 hover:from-fuchsia-600 hover:to-indigo-600 text-white rounded py-2 font-medium shadow-md transition">로그인</button>
-    </form>
-    <p class="text-center text-sm mt-4 text-gray-600">
-      계정이 없으신가요? <a href="/signup.html" class="text-fuchsia-600 font-medium underline">회원가입</a>
-    </p>
-  </div>
+  <div id="app"></div>
 
   <script src="/js/api.js"></script>
   <script>
-    const form = document.getElementById("login-form");
-    const errorEl = document.getElementById("error");
-    const submitBtn = document.getElementById("submit-btn");
+    const { createApp } = Vue;
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      errorEl.classList.add("hidden");
-      submitBtn.disabled = true;
-      submitBtn.textContent = "처리 중...";
-      try {
-        const email = document.getElementById("email").value;
-        const password = document.getElementById("password").value;
-        const res = await Api.login(email, password);
-        setToken(res.token);
-        location.href = res.user.team_id ? `/kanban.html?team=${res.user.team_id}` : "/teams.html";
-      } catch (err) {
-        errorEl.textContent = err.message;
-        errorEl.classList.remove("hidden");
-        submitBtn.disabled = false;
-        submitBtn.textContent = "로그인";
-      }
-    });
-
-    if (getToken()) {
-      Api.me().then((u) => {
-        location.href = u.team_id ? `/kanban.html?team=${u.team_id}` : "/teams.html";
-      }).catch(() => {});
-    }
+    createApp({
+      data() {
+        return { email: "", password: "", error: "", loading: false };
+      },
+      async mounted() {
+        if (getToken()) await this.redirectAfterAuth();
+      },
+      methods: {
+        async submit() {
+          this.error = "";
+          this.loading = true;
+          try {
+            const res = await Api.login(this.email, this.password);
+            setToken(res.token);
+            await this.redirectAfterAuth();
+          } catch (err) {
+            this.error = err.message;
+            this.loading = false;
+          }
+        },
+        async redirectAfterAuth() {
+          try {
+            const teams = await Api.listMyTeams();
+            location.href = teams.length ? `/kanban.html?team=${teams[0].id}` : "/kanban.html";
+          } catch (e) {
+            location.href = "/kanban.html";
+          }
+        },
+      },
+      template: `
+        <div class="w-full max-w-sm bg-white/95 backdrop-blur rounded-xl shadow-2xl p-6">
+          <div class="flex justify-center mb-4">
+            <span class="bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white px-4 py-2 rounded-full font-bold shadow">TaskFlow</span>
+          </div>
+          <h1 class="text-xl font-bold text-center mb-4">로그인</h1>
+          <form @submit.prevent="submit" class="space-y-3">
+            <input v-model="email" type="email" required placeholder="이메일" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400" />
+            <input v-model="password" type="password" required placeholder="비밀번호" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400" />
+            <p v-if="error" class="text-red-600 text-sm">{{ error }}</p>
+            <button type="submit" :disabled="loading" class="w-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 hover:from-fuchsia-600 hover:to-indigo-600 text-white rounded py-2 font-medium shadow-md transition">
+              {{ loading ? '처리 중...' : '로그인' }}
+            </button>
+          </form>
+          <p class="text-center text-sm mt-4 text-gray-600">
+            계정이 없으신가요? <a href="/signup.html" class="text-fuchsia-600 font-medium underline">회원가입</a>
+          </p>
+        </div>
+      `,
+    }).mount("#app");
   </script>
 </body>
 </html>

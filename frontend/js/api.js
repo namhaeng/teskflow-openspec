@@ -54,11 +54,13 @@ const Api = {
   me: () => api("GET", "/auth/me"),
 
   createTeam: (name) => api("POST", "/teams", { name }),
+  listMyTeams: () => api("GET", "/teams/mine"),
   previewTeam: (invite_code) => api("GET", `/teams/preview?invite_code=${encodeURIComponent(invite_code)}`),
   joinTeam: (invite_code) => api("POST", "/teams/join", { invite_code }),
   leaveTeam: (teamId) => api("DELETE", `/teams/${teamId}/leave`),
   getTeam: (teamId) => api("GET", `/teams/${teamId}`),
   getMembers: (teamId) => api("GET", `/teams/${teamId}/members`),
+  updateTeamActive: (teamId, isActive) => api("PATCH", `/teams/${teamId}/active`, { is_active: isActive }),
 
   listTasks: (teamId, filter = "all") => api("GET", `/teams/${teamId}/tasks?filter=${filter}`),
   createTask: (teamId, title, assignee_id) => api("POST", `/teams/${teamId}/tasks`, { title, assignee_id }),

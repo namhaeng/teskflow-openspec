@@ -3,7 +3,7 @@ from fastapi import Depends, Header
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Team
+from models import User, Team, TeamMembership
 from security import decode_access_token
 from errors import token_expired, forbidden
 
@@ -28,10 +28,26 @@ def get_current_user(
     return user
 
 
+def get_membership(team_id: int, user: User, db: Session) -> TeamMembership | None:
+    return (
+        db.query(TeamMembership)
+        .filter(TeamMembership.team_id == team_id, TeamMembership.user_id == user.id)
+        .first()
+    )
+
+
 def require_team_member(team_id: int, user: User, db: Session) -> Team:
-    if user.team_id != team_id:
-        raise forbidden("이 팀의 멤버가 아닙니다")
+    membership = get_membership(team_id, user, db)
+    if not membership:
+        raise forbidden("이 과제의 멤버가 아닙니다")
     team = db.query(Team).filter(Team.id == team_id).first()
     if not team:
-        raise forbidden("이 팀의 멤버가 아닙니다")
+        raise forbidden("이 과제의 멤버가 아닙니다")
+    return team
+
+
+def require_active_team_member(team_id: int, user: User, db: Session) -> Team:
+    team = require_team_member(team_id, user, db)
+    if not team.is_active:
+        raise forbidden("비활성화된 과제입니다. 쓰기 작업을 할 수 없습니다")
     return team
