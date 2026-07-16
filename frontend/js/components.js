@@ -31,7 +31,10 @@ const TeamSidebar = {
   },
   template: `
     <aside class="hidden md:flex md:flex-col h-full w-56 shrink-0 bg-white border-r">
-      <div class="p-3 border-b flex items-center justify-between">
+      <div class="px-3 pt-3 pb-2">
+        <span class="font-bold text-teal-700">TaskFlow</span>
+      </div>
+      <div class="px-3 pb-2 border-b flex items-center justify-between">
         <span class="font-bold text-sm text-gray-500">내 과제</span>
         <button class="text-teal-700 text-lg leading-none" title="새 과제 추가" @click="$emit('add')">+</button>
       </div>
@@ -84,13 +87,8 @@ const TopNav = {
   template: `
     <header class="shrink-0 bg-white border-b px-4 py-3 flex justify-between items-center">
       <div class="flex items-center gap-4">
-        <span class="font-bold text-teal-700">TaskFlow</span>
-        <span class="text-gray-500 text-sm hidden md:inline">{{ teamName }}</span>
+        <span class="font-bold text-gray-800">{{ teamName }}</span>
       </div>
-      <nav class="hidden md:flex gap-2">
-        <a :href="'/kanban.html?team=' + teamId" class="px-3 py-1.5 rounded" :class="active === 'kanban' ? 'bg-teal-700 text-white' : 'text-gray-600'">칸반</a>
-        <a :href="'/chat.html?team=' + teamId" class="px-3 py-1.5 rounded" :class="active === 'chat' ? 'bg-teal-700 text-white' : 'text-gray-600'">채팅</a>
-      </nav>
       <div class="hidden md:flex items-center gap-3 text-sm text-gray-600">
         <span>{{ userEmail }}</span>
         <button class="text-teal-600 underline" @click="logout">로그아웃</button>

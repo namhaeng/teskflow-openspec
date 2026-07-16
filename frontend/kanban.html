@@ -247,6 +247,7 @@
 
               <aside class="hidden lg:flex flex-col h-full w-72 shrink-0 border-l bg-white overflow-y-auto">
                 <div class="p-4 border-b">
+                  <a :href="'/chat.html?team=' + teamId" class="w-full flex items-center justify-center gap-1.5 bg-teal-700 text-white rounded py-2 text-sm font-medium mb-3">💬 채팅</a>
                   <div class="flex justify-between items-center mb-2">
                     <h2 class="font-bold text-sm text-gray-500">과제 멤버 ({{ members.length }})</h2>
                     <button v-if="team.role !== 'owner'" class="text-xs text-red-600 underline" @click="leaveTeam">나가기</button>
