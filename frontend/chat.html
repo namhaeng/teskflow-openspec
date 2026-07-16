@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskFlow - 채팅</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+  <header id="nav" class="bg-white border-b px-4 py-3 flex justify-between items-center"></header>
+
+  <main class="max-w-3xl w-full mx-auto flex-1 flex flex-col p-4">
+    <div class="flex justify-between items-center mb-2">
+      <h1 class="font-bold" id="team-title"></h1>
+      <span id="poll-status" class="text-xs text-green-600">● 5초마다 새로고침</span>
+    </div>
+
+    <div id="messages" class="flex-1 overflow-y-auto border rounded bg-white p-4 space-y-3 min-h-[300px]"></div>
+
+    <form id="send-form" class="mt-3 flex gap-2 items-end">
+      <div class="flex-1">
+        <textarea id="content" rows="1" placeholder="메시지 입력 (1000자 이내)…" class="w-full border rounded px-3 py-2"></textarea>
+        <div class="text-xs mt-1" id="counter">0 / 1000</div>
+      </div>
+      <button type="submit" id="send-btn" class="bg-teal-700 text-white rounded px-4 py-2 font-medium">전송</button>
+    </form>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    const teamId = requireTeam();
+    let lastSince = null;
+    let currentUserId = null;
+    const MAX_LEN = 1000;
+    let pollTimer = null;
+
+    async function init() {
+      const team = await Api.getTeam(teamId);
+      document.getElementById("team-title").textContent = `${team.name} 팀 · 채팅`;
+      renderNav("chat", team.name, teamId);
+      const me = await Api.me();
+      currentUserId = me.id;
+      await loadInitial();
+      pollTimer = setInterval(poll, 5000);
+    }
+
+    function renderMessages(list, append) {
+      const el = document.getElementById("messages");
+      if (!append) el.innerHTML = "";
+      if (!append && list.length === 0) {
+        el.innerHTML = `<div class="text-center text-gray-400 py-10">💬<br>아직 대화가 없습니다<br><span class="text-sm">첫 메시지를 보내 팀원과 대화를 시작하세요</span></div>`;
+        return;
+      }
+      list.forEach((m) => {
+        const mine = m.user_id === currentUserId;
+        const div = document.createElement("div");
+        div.className = `group flex ${mine ? "justify-end" : "justify-start"}`;
+        div.innerHTML = `
+          <div class="max-w-[70%]">
+            <div class="text-xs text-gray-400 mb-0.5 ${mine ? "text-right" : ""}">${m.user_email.split("@")[0]} · ${new Date(m.created_at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</div>
+            <div class="flex items-center gap-1 ${mine ? "flex-row-reverse" : ""}">
+              <div class="${mine ? "bg-teal-700 text-white" : "bg-gray-100"} rounded px-3 py-2 text-sm">${escapeHtml(m.content)}</div>
+              ${mine ? `<button data-id="${m.id}" class="del-btn opacity-0 group-hover:opacity-100 text-red-500 text-sm">🗑</button>` : ""}
+            </div>
+          </div>
+        `;
+        el.appendChild(div);
+      });
+      el.scrollTop = el.scrollHeight;
+
+      el.querySelectorAll(".del-btn").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          try {
+            await Api.deleteMessage(Number(btn.dataset.id));
+            await loadInitial();
+          } catch (err) {
+            alert(err.message);
+          }
+        })
+      );
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    async function loadInitial() {
+      const list = await Api.listMessages(teamId);
+      lastSince = list.length ? list[list.length - 1].created_at : null;
+      renderMessages(list, false);
+    }
+
+    async function poll() {
+      try {
+        const list = await Api.listMessages(teamId, lastSince);
+        if (list.length) {
+          lastSince = list[list.length - 1].created_at;
+          const existing = document.querySelector("#messages .text-gray-400");
+          if (existing) document.getElementById("messages").innerHTML = "";
+          renderMessages(list, true);
+        }
+        document.getElementById("poll-status").textContent = "● 5초마다 새로고침";
+        document.getElementById("poll-status").className = "text-xs text-green-600";
+      } catch (err) {
+        document.getElementById("poll-status").textContent = "⚠ 연결 끊김 · 재시도 중";
+        document.getElementById("poll-status").className = "text-xs text-red-600";
+      }
+    }
+
+    const contentEl = document.getElementById("content");
+    const counterEl = document.getElementById("counter");
+    const sendBtn = document.getElementById("send-btn");
+
+    contentEl.addEventListener("input", () => {
+      const len = contentEl.value.length;
+      counterEl.textContent = `${len} / ${MAX_LEN}`;
+      const over = len > MAX_LEN;
+      counterEl.className = over ? "text-xs mt-1 text-red-600 font-bold" : "text-xs mt-1 text-gray-400";
+      sendBtn.disabled = over || len === 0;
+    });
+
+    document.getElementById("send-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const content = contentEl.value.trim();
+      if (!content || content.length > MAX_LEN) return;
+      try {
+        await Api.sendMessage(teamId, content);
+        contentEl.value = "";
+        counterEl.textContent = `0 / ${MAX_LEN}`;
+        await loadInitial();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

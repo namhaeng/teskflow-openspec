@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskFlow - 칸반</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col overflow-hidden">
+  <header id="nav" class="shrink-0 bg-white border-b px-4 py-3 flex justify-between items-center"></header>
+
+  <main class="flex-1 min-h-0 max-w-6xl w-full mx-auto p-4 flex flex-col">
+    <div class="shrink-0 flex flex-wrap gap-2 justify-between items-center mb-4">
+      <div class="flex gap-2">
+        <button data-filter="all" class="filter-btn px-3 py-1.5 rounded bg-gray-800 text-white text-sm">전체</button>
+        <button data-filter="me" class="filter-btn px-3 py-1.5 rounded bg-gray-200 text-sm">@me</button>
+        <button data-filter="unassigned" class="filter-btn px-3 py-1.5 rounded bg-gray-200 text-sm">미할당</button>
+      </div>
+    </div>
+
+    <!-- mobile column indicator -->
+    <div class="shrink-0 flex md:hidden gap-2 mb-3 text-sm font-medium">
+      <button data-col="TODO" class="col-tab flex-1 py-2 border-b-2">TODO</button>
+      <button data-col="DOING" class="col-tab flex-1 py-2 border-b-2">DOING</button>
+      <button data-col="DONE" class="col-tab flex-1 py-2 border-b-2">DONE</button>
+    </div>
+
+    <div id="board" class="flex-1 min-h-0 grid md:grid-cols-3 gap-4"></div>
+  </main>
+
+  <!-- Task detail modal -->
+  <div id="modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40">
+    <div class="bg-white rounded-lg w-full max-w-md p-5">
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="font-bold" id="modal-title-label">#<span id="modal-id"></span> <span id="modal-title-text"></span></h3>
+        <button id="modal-close" class="text-gray-400 text-xl leading-none">&times;</button>
+      </div>
+      <label class="text-sm text-gray-600">제목</label>
+      <input id="modal-title-input" class="w-full border rounded px-3 py-2 mb-3" />
+      <label class="text-sm text-gray-600">상태</label>
+      <div class="flex gap-2 mb-3" id="modal-status-group">
+        <button data-status="TODO" class="status-btn flex-1 border rounded py-1.5">TODO</button>
+        <button data-status="DOING" class="status-btn flex-1 border rounded py-1.5">DOING</button>
+        <button data-status="DONE" class="status-btn flex-1 border rounded py-1.5">DONE</button>
+      </div>
+      <label class="text-sm text-gray-600">담당자</label>
+      <select id="modal-assignee" class="w-full border rounded px-3 py-2 mb-4"></select>
+      <div class="flex gap-2">
+        <button id="modal-save" class="flex-1 bg-teal-700 text-white rounded py-2 font-medium">저장</button>
+        <button id="modal-delete" class="flex-1 border border-red-400 text-red-600 rounded py-2 font-medium">🗑 삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete confirm dialog -->
+  <div id="confirm-dialog" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg w-full max-w-sm p-5 text-center">
+      <div class="text-3xl mb-2">⚠️</div>
+      <p class="font-bold mb-1">이 카드를 삭제하시겠습니까?</p>
+      <p class="text-sm text-gray-500 mb-4" id="confirm-text"></p>
+      <div class="flex gap-2">
+        <button id="confirm-cancel" class="flex-1 border rounded py-2">취소</button>
+        <button id="confirm-delete" class="flex-1 bg-red-600 text-white rounded py-2">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <button id="fab-add" class="md:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-teal-700 text-white text-2xl shadow-lg">+</button>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    const teamId = requireTeam();
+    let members = [];
+    let tasks = [];
+    let currentFilter = "all";
+    let mobileCol = "TODO";
+    let editingTaskId = null;
+    const COLUMNS = [
+      { key: "TODO", label: "TODO", color: "bg-yellow-50 border-yellow-300" },
+      { key: "DOING", label: "DOING", color: "bg-blue-50 border-blue-300" },
+      { key: "DONE", label: "DONE", color: "bg-green-50 border-green-300" },
+    ];
+
+    async function init() {
+      const team = await Api.getTeam(teamId);
+      renderNav("kanban", team.name, teamId);
+      members = await Api.getMembers(teamId);
+      populateAssigneeSelect();
+      await loadTasks();
+      applyMobileColumn();
+    }
+
+    function populateAssigneeSelect() {
+      const sel = document.getElementById("modal-assignee");
+      sel.innerHTML = `<option value="">미할당</option>` +
+        members.map((m) => `<option value="${m.id}">${m.email}${m.role === 'owner' ? ' (owner)' : ''}</option>`).join("");
+    }
+
+    async function loadTasks() {
+      tasks = await Api.listTasks(teamId, currentFilter);
+      renderBoard();
+    }
+
+    function renderBoard() {
+      const board = document.getElementById("board");
+      board.innerHTML = COLUMNS.map((col) => {
+        const colTasks = tasks.filter((t) => t.status === col.key);
+        return `
+          <div class="kanban-col ${col.key === mobileCol ? 'flex' : 'hidden md:flex'} flex-col h-full min-h-0 border rounded ${col.color}"
+               data-col="${col.key}" ondragover="event.preventDefault()" ondrop="onDrop(event, '${col.key}')">
+            <div class="shrink-0 flex justify-between items-center px-3 py-2 font-bold">
+              <span>${col.label} · ${colTasks.length}</span>
+              <button class="add-btn text-lg" data-col="${col.key}">+</button>
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-2 space-y-2" id="col-${col.key}">
+              ${colTasks.length === 0 ? emptyStateHtml(col.key) : colTasks.map(cardHtml).join("")}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      document.querySelectorAll(".add-btn").forEach((btn) =>
+        btn.addEventListener("click", () => showInlineInput(btn.dataset.col))
+      );
+      document.querySelectorAll(".task-card").forEach((card) => {
+        card.addEventListener("click", () => openModal(Number(card.dataset.id)));
+        card.addEventListener("dragstart", (e) => {
+          e.dataTransfer.setData("text/plain", card.dataset.id);
+        });
+        card.addEventListener("touchstart", () => {
+          card._pressTimer = setTimeout(() => openStatusMenu(Number(card.dataset.id)), 500);
+        });
+        card.addEventListener("touchend", () => clearTimeout(card._pressTimer));
+      });
+    }
+
+    function emptyStateHtml(colKey) {
+      if (colKey === "TODO") {
+        return `<div class="border-2 border-dashed rounded p-6 text-center text-gray-400 text-sm">
+          📋<br>카드 없음<br><button class="add-btn text-teal-700 underline mt-1" data-col="TODO">+ 첫 태스크 만들기</button>
+        </div>`;
+      }
+      return `<div class="border-2 border-dashed rounded p-6 text-center text-gray-400 text-sm">📋<br>카드 없음<br>드래그로 이동</div>`;
+    }
+
+    function cardHtml(t) {
+      const assignee = t.assignee_id ? (members.find((m) => m.id === t.assignee_id)?.email.split("@")[0] || "?") : null;
+      return `
+        <div class="task-card bg-white border rounded p-3 cursor-pointer shadow-sm" draggable="true" data-id="${t.id}">
+          <div class="font-medium text-sm">${escapeHtml(t.title)}</div>
+          <div class="text-xs text-gray-500 mt-1">#${t.id} · ${assignee ? '@' + assignee : '<span class="text-amber-600">⚠ 미할당</span>'}</div>
+        </div>
+      `;
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function onDrop(e, status) {
+      const id = Number(e.dataTransfer.getData("text/plain"));
+      Api.updateTaskStatus(id, status).then(loadTasks);
+    }
+
+    function openStatusMenu(id) {
+      const next = prompt("상태 변경: TODO / DOING / DONE");
+      if (next && ["TODO", "DOING", "DONE"].includes(next.toUpperCase())) {
+        Api.updateTaskStatus(id, next.toUpperCase()).then(loadTasks);
+      }
+    }
+
+    function showInlineInput(colKey) {
+      const container = document.getElementById(`col-${colKey}`);
+      const wrapper = document.createElement("div");
+      wrapper.className = "bg-white border-2 border-teal-600 rounded p-2 space-y-1";
+      wrapper.innerHTML = `
+        <input class="inline-title w-full border-b px-1 py-1 text-sm" placeholder="태스크 제목" autofocus />
+        <select class="inline-assignee w-full border rounded px-1 py-1 text-sm">
+          <option value="">담당자: 미할당</option>
+          ${members.map((m) => `<option value="${m.id}">담당자: ${m.email}</option>`).join("")}
+        </select>
+        <div class="text-xs text-gray-400">Enter: 저장 · Esc: 취소</div>
+      `;
+      container.prepend(wrapper);
+      const titleInput = wrapper.querySelector(".inline-title");
+      titleInput.focus();
+
+      const cleanup = () => wrapper.remove();
+      titleInput.addEventListener("keydown", async (e) => {
+        if (e.key === "Escape") cleanup();
+        if (e.key === "Enter" && titleInput.value.trim()) {
+          const assigneeVal = wrapper.querySelector(".inline-assignee").value;
+          await Api.createTask(teamId, titleInput.value.trim(), assigneeVal ? Number(assigneeVal) : null);
+          if (colKey !== "TODO") {
+            // created tasks always start as TODO per spec; move if created from another column's + button
+          }
+          await loadTasks();
+        }
+      });
+    }
+
+    function openModal(id) {
+      const t = tasks.find((x) => x.id === id);
+      editingTaskId = id;
+      document.getElementById("modal-id").textContent = t.id;
+      document.getElementById("modal-title-text").textContent = t.title;
+      document.getElementById("modal-title-input").value = t.title;
+      document.getElementById("modal-assignee").value = t.assignee_id || "";
+      document.querySelectorAll(".status-btn").forEach((b) => {
+        b.classList.toggle("bg-teal-700", b.dataset.status === t.status);
+        b.classList.toggle("text-white", b.dataset.status === t.status);
+      });
+      document.getElementById("modal").dataset.status = t.status;
+      document.getElementById("modal").classList.remove("hidden");
+    }
+
+    document.querySelectorAll(".status-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.getElementById("modal").dataset.status = btn.dataset.status;
+        document.querySelectorAll(".status-btn").forEach((b) => {
+          b.classList.toggle("bg-teal-700", b === btn);
+          b.classList.toggle("text-white", b === btn);
+        });
+      });
+    });
+
+    document.getElementById("modal-close").addEventListener("click", () => document.getElementById("modal").classList.add("hidden"));
+
+    document.getElementById("modal-save").addEventListener("click", async () => {
+      const title = document.getElementById("modal-title-input").value.trim();
+      const assigneeVal = document.getElementById("modal-assignee").value;
+      const status = document.getElementById("modal").dataset.status;
+      await Api.updateTaskTitle(editingTaskId, title, assigneeVal ? Number(assigneeVal) : null);
+      await Api.updateTaskStatus(editingTaskId, status);
+      document.getElementById("modal").classList.add("hidden");
+      await loadTasks();
+    });
+
+    document.getElementById("modal-delete").addEventListener("click", () => {
+      const t = tasks.find((x) => x.id === editingTaskId);
+      document.getElementById("confirm-text").textContent = `'#${t.id} ${t.title}' — 되돌릴 수 없습니다`;
+      document.getElementById("confirm-dialog").classList.remove("hidden");
+    });
+
+    document.getElementById("confirm-cancel").addEventListener("click", () => document.getElementById("confirm-dialog").classList.add("hidden"));
+    document.getElementById("confirm-delete").addEventListener("click", async () => {
+      try {
+        await Api.deleteTask(editingTaskId);
+        document.getElementById("confirm-dialog").classList.add("hidden");
+        document.getElementById("modal").classList.add("hidden");
+        await loadTasks();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    document.querySelectorAll(".filter-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentFilter = btn.dataset.filter;
+        document.querySelectorAll(".filter-btn").forEach((b) => {
+          b.classList.toggle("bg-gray-800", b === btn);
+          b.classList.toggle("text-white", b === btn);
+          b.classList.toggle("bg-gray-200", b !== btn);
+        });
+        loadTasks();
+      });
+    });
+
+    document.querySelectorAll(".col-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        mobileCol = btn.dataset.col;
+        applyMobileColumn();
+        renderBoard();
+      });
+    });
+
+    function applyMobileColumn() {
+      document.querySelectorAll(".col-tab").forEach((b) => {
+        b.classList.toggle("border-teal-700", b.dataset.col === mobileCol);
+        b.classList.toggle("text-teal-700", b.dataset.col === mobileCol);
+        b.classList.toggle("border-transparent", b.dataset.col !== mobileCol);
+      });
+    }
+
+    document.getElementById("fab-add").addEventListener("click", () => showInlineInput(mobileCol));
+
+    init();
+  </script>
+</body>
+</html>

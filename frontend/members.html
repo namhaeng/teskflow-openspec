@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskFlow - 팀 멤버</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header id="nav" class="bg-white border-b px-4 py-3 flex justify-between items-center"></header>
+
+  <main class="max-w-2xl mx-auto p-4">
+    <div class="flex justify-between items-center mb-3">
+      <h1 class="font-bold" id="title"></h1>
+      <button id="leave-btn" class="text-sm text-red-600 underline">팀 나가기</button>
+    </div>
+    <div id="member-list" class="bg-white border rounded divide-y"></div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    const teamId = requireTeam();
+
+    async function init() {
+      const team = await Api.getTeam(teamId);
+      renderNav("members", team.name, teamId);
+      const members = await Api.getMembers(teamId);
+      document.getElementById("title").textContent = `팀 멤버 (${members.length})`;
+      document.getElementById("member-list").innerHTML = members.map((m) => `
+        <div class="flex items-center gap-3 p-3">
+          <div class="w-9 h-9 rounded-full bg-gray-300 flex items-center justify-center font-bold">${m.email[0].toUpperCase()}</div>
+          <div class="flex-1">
+            <div class="text-sm font-medium">${m.email}</div>
+            <div class="text-xs text-gray-500">${m.role === "owner" ? "★ owner" : "member"}</div>
+          </div>
+          <div class="text-xs text-gray-400">${new Date(m.created_at).toLocaleDateString("ko-KR")}</div>
+        </div>
+      `).join("");
+    }
+
+    document.getElementById("leave-btn").addEventListener("click", async () => {
+      if (!confirm("정말 팀을 나가시겠습니까?")) return;
+      await Api.leaveTeam(teamId);
+      location.href = "/teams.html";
+    });
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskFlow - 회원가입</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-sm bg-white rounded-lg shadow p-6">
+    <div class="flex justify-center mb-4">
+      <span class="bg-teal-600 text-white px-4 py-2 rounded font-bold">TaskFlow</span>
+    </div>
+    <h1 class="text-xl font-bold text-center mb-4">회원가입</h1>
+    <form id="signup-form" class="space-y-3">
+      <input id="email" type="email" required placeholder="이메일 입력" class="w-full border rounded px-3 py-2" />
+      <input id="password" type="password" required placeholder="비밀번호 (8자 이상)" class="w-full border rounded px-3 py-2" />
+      <p id="error" class="text-red-600 text-sm hidden"></p>
+      <button type="submit" id="submit-btn" class="w-full bg-teal-600 text-white rounded py-2 font-medium">가입하기</button>
+    </form>
+    <p class="text-center text-sm mt-4 text-gray-600">
+      이미 계정이 있으신가요? <a href="/index.html" class="text-teal-600 underline">로그인</a>
+    </p>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const form = document.getElementById("signup-form");
+    const errorEl = document.getElementById("error");
+    const submitBtn = document.getElementById("submit-btn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.classList.add("hidden");
+
+      const password = document.getElementById("password").value;
+      if (password.length < 8) {
+        errorEl.textContent = "8자 이상 입력해주세요";
+        errorEl.classList.remove("hidden");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "처리 중...";
+      try {
+        const email = document.getElementById("email").value;
+        const res = await Api.signup(email, password);
+        setToken(res.token);
+        location.href = "/teams.html";
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove("hidden");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "가입하기";
+      }
+    });
+  </script>
+</body>
+</html>
