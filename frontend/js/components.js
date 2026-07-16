@@ -30,7 +30,7 @@ const TeamSidebar = {
     },
   },
   template: `
-    <aside class="hidden md:flex md:flex-col w-56 shrink-0 bg-white border-r">
+    <aside class="hidden md:flex md:flex-col h-full w-56 shrink-0 bg-white border-r">
       <div class="p-3 border-b flex items-center justify-between">
         <span class="font-bold text-sm text-gray-500">내 과제</span>
         <button class="text-teal-700 text-lg leading-none" title="새 과제 추가" @click="$emit('add')">+</button>
@@ -90,7 +90,6 @@ const TopNav = {
       <nav class="hidden md:flex gap-2">
         <a :href="'/kanban.html?team=' + teamId" class="px-3 py-1.5 rounded" :class="active === 'kanban' ? 'bg-teal-700 text-white' : 'text-gray-600'">칸반</a>
         <a :href="'/chat.html?team=' + teamId" class="px-3 py-1.5 rounded" :class="active === 'chat' ? 'bg-teal-700 text-white' : 'text-gray-600'">채팅</a>
-        <a :href="'/members.html?team=' + teamId" class="px-3 py-1.5 rounded" :class="active === 'members' ? 'bg-teal-700 text-white' : 'text-gray-600'">과제 멤버</a>
       </nav>
       <div class="hidden md:flex items-center gap-3 text-sm text-gray-600">
         <span>{{ userEmail }}</span>
@@ -110,7 +109,6 @@ const TopNav = {
         <nav class="p-2">
           <a :href="'/kanban.html?team=' + teamId" class="block px-4 py-3 rounded" :class="active === 'kanban' ? 'bg-teal-50 text-teal-700 font-medium' : ''">📋 칸반</a>
           <a :href="'/chat.html?team=' + teamId" class="block px-4 py-3 rounded" :class="active === 'chat' ? 'bg-teal-50 text-teal-700 font-medium' : ''">💬 채팅</a>
-          <a :href="'/members.html?team=' + teamId" class="block px-4 py-3 rounded" :class="active === 'members' ? 'bg-teal-50 text-teal-700 font-medium' : ''">👥 과제 멤버</a>
           <hr class="my-2" />
           <button class="w-full text-left px-4 py-3 rounded text-red-600" @click="logout">🚪 로그아웃</button>
         </nav>

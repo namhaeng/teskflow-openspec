@@ -143,6 +143,21 @@
             alert(err.message);
           }
         },
+        copyInviteCode() {
+          navigator.clipboard.writeText(this.team.invite_code);
+        },
+        formatJoinDate(iso) {
+          return new Date(iso).toLocaleDateString("ko-KR");
+        },
+        async leaveTeam() {
+          if (!confirm("정말 이 과제를 나가시겠습니까?")) return;
+          try {
+            await Api.leaveTeam(this.teamId);
+            location.href = "/kanban.html";
+          } catch (err) {
+            alert(err.message);
+          }
+        },
       },
       template: `
         <template v-if="hasNoTeams">
@@ -167,67 +182,94 @@
           <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
             <top-nav active="kanban" :team-name="team.name" :team-id="teamId" />
 
-            <main class="flex-1 min-h-0 max-w-6xl w-full mx-auto p-4 flex flex-col">
-              <div class="shrink-0 flex flex-wrap gap-2 justify-between items-center mb-4">
-                <div class="flex gap-2">
-                  <button class="px-3 py-1.5 rounded text-sm" :class="currentFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-200'" @click="setFilter('all')">전체</button>
-                  <button class="px-3 py-1.5 rounded text-sm" :class="currentFilter === 'me' ? 'bg-gray-800 text-white' : 'bg-gray-200'" @click="setFilter('me')">@me</button>
-                  <button class="px-3 py-1.5 rounded text-sm" :class="currentFilter === 'unassigned' ? 'bg-gray-800 text-white' : 'bg-gray-200'" @click="setFilter('unassigned')">미할당</button>
-                </div>
-              </div>
-
-              <div class="shrink-0 flex md:hidden gap-2 mb-3 text-sm font-medium">
-                <button v-for="c in columns" :key="c.key" class="flex-1 py-2 border-b-2"
-                        :class="mobileCol === c.key ? 'border-teal-700 text-teal-700' : 'border-transparent'"
-                        @click="mobileCol = c.key">{{ c.label }}</button>
-              </div>
-
-              <div class="flex-1 min-h-0 grid md:grid-cols-3 gap-4">
-                <div v-for="col in columns" :key="col.key"
-                     class="flex-col h-full min-h-0 border rounded"
-                     :class="[col.color, (col.key === mobileCol ? 'flex' : 'hidden md:flex')]"
-                     @dragover.prevent
-                     @drop="onDrop($event, col.key)">
-                  <div class="shrink-0 flex justify-between items-center px-3 py-2 font-bold">
-                    <span>{{ col.label }} · {{ tasksFor(col.key).length }}</span>
-                    <button class="text-lg" @click="openInlineAdd(col.key)">+</button>
-                  </div>
-                  <div class="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
-                    <div v-if="inlineAddCol === col.key" class="bg-white border-2 border-teal-600 rounded p-2 space-y-1">
-                      <input ref="inlineInput" v-model="inlineTitle" @keydown.enter="submitInlineAdd" @keydown.esc="cancelInlineAdd"
-                             class="w-full border-b px-1 py-1 text-sm" placeholder="태스크 제목" />
-                      <select v-model="inlineAssignee" class="w-full border rounded px-1 py-1 text-sm">
-                        <option value="">담당자: 미할당</option>
-                        <option v-for="m in members" :key="m.id" :value="m.id">담당자: {{ m.email }}</option>
-                      </select>
-                      <div class="text-xs text-gray-400">Enter: 저장 · Esc: 취소</div>
-                    </div>
-
-                    <template v-if="tasksFor(col.key).length === 0 && inlineAddCol !== col.key">
-                      <div class="border-2 border-dashed rounded p-6 text-center text-gray-400 text-sm">
-                        📋<br>카드 없음<br>
-                        <button v-if="col.key === 'TODO'" class="text-teal-700 underline mt-1" @click="openInlineAdd('TODO')">+ 첫 태스크 만들기</button>
-                        <template v-else>드래그로 이동</template>
-                      </div>
-                    </template>
-
-                    <div v-for="t in tasksFor(col.key)" :key="t.id"
-                         class="bg-white border rounded p-3 cursor-pointer shadow-sm"
-                         draggable="true"
-                         @dragstart="onDragStart($event, t.id)"
-                         @click="openTaskModal(t)"
-                         @touchstart="openStatusMenu(t.id)">
-                      <div class="font-medium text-sm">{{ t.title }}</div>
-                      <div class="text-xs text-gray-500 mt-1">
-                        #{{ t.id }} ·
-                        <span v-if="assigneeLabel(t)">@{{ assigneeLabel(t) }}</span>
-                        <span v-else class="text-amber-600">⚠ 미할당</span>
-                      </div>
-                    </div>
+            <div class="flex-1 min-h-0 flex overflow-hidden">
+              <main class="flex-1 min-h-0 min-w-0 p-4 flex flex-col overflow-hidden">
+                <div class="shrink-0 flex flex-wrap gap-2 justify-between items-center mb-4">
+                  <div class="flex gap-2">
+                    <button class="px-3 py-1.5 rounded text-sm" :class="currentFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-200'" @click="setFilter('all')">전체</button>
+                    <button class="px-3 py-1.5 rounded text-sm" :class="currentFilter === 'me' ? 'bg-gray-800 text-white' : 'bg-gray-200'" @click="setFilter('me')">@me</button>
+                    <button class="px-3 py-1.5 rounded text-sm" :class="currentFilter === 'unassigned' ? 'bg-gray-800 text-white' : 'bg-gray-200'" @click="setFilter('unassigned')">미할당</button>
                   </div>
                 </div>
-              </div>
-            </main>
+
+                <div class="shrink-0 flex md:hidden gap-2 mb-3 text-sm font-medium">
+                  <button v-for="c in columns" :key="c.key" class="flex-1 py-2 border-b-2"
+                          :class="mobileCol === c.key ? 'border-teal-700 text-teal-700' : 'border-transparent'"
+                          @click="mobileCol = c.key">{{ c.label }}</button>
+                </div>
+
+                <div class="flex-1 min-h-0 grid md:grid-cols-3 gap-4">
+                  <div v-for="col in columns" :key="col.key"
+                       class="flex-col h-full min-h-0 border rounded"
+                       :class="[col.color, (col.key === mobileCol ? 'flex' : 'hidden md:flex')]"
+                       @dragover.prevent
+                       @drop="onDrop($event, col.key)">
+                    <div class="shrink-0 flex justify-between items-center px-3 py-2 font-bold">
+                      <span>{{ col.label }} · {{ tasksFor(col.key).length }}</span>
+                      <button class="text-lg" @click="openInlineAdd(col.key)">+</button>
+                    </div>
+                    <div class="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
+                      <div v-if="inlineAddCol === col.key" class="bg-white border-2 border-teal-600 rounded p-2 space-y-1">
+                        <input ref="inlineInput" v-model="inlineTitle" @keydown.enter="submitInlineAdd" @keydown.esc="cancelInlineAdd"
+                               class="w-full border-b px-1 py-1 text-sm" placeholder="태스크 제목" />
+                        <select v-model="inlineAssignee" class="w-full border rounded px-1 py-1 text-sm">
+                          <option value="">담당자: 미할당</option>
+                          <option v-for="m in members" :key="m.id" :value="m.id">담당자: {{ m.email }}</option>
+                        </select>
+                        <div class="text-xs text-gray-400">Enter: 저장 · Esc: 취소</div>
+                      </div>
+
+                      <template v-if="tasksFor(col.key).length === 0 && inlineAddCol !== col.key">
+                        <div class="border-2 border-dashed rounded p-6 text-center text-gray-400 text-sm">
+                          📋<br>카드 없음<br>
+                          <button v-if="col.key === 'TODO'" class="text-teal-700 underline mt-1" @click="openInlineAdd('TODO')">+ 첫 태스크 만들기</button>
+                          <template v-else>드래그로 이동</template>
+                        </div>
+                      </template>
+
+                      <div v-for="t in tasksFor(col.key)" :key="t.id"
+                           class="bg-white border rounded p-3 cursor-pointer shadow-sm"
+                           draggable="true"
+                           @dragstart="onDragStart($event, t.id)"
+                           @click="openTaskModal(t)"
+                           @touchstart="openStatusMenu(t.id)">
+                        <div class="font-medium text-sm">{{ t.title }}</div>
+                        <div class="text-xs text-gray-500 mt-1">
+                          #{{ t.id }} ·
+                          <span v-if="assigneeLabel(t)">@{{ assigneeLabel(t) }}</span>
+                          <span v-else class="text-amber-600">⚠ 미할당</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </main>
+
+              <aside class="hidden lg:flex flex-col h-full w-72 shrink-0 border-l bg-white overflow-y-auto">
+                <div class="p-4 border-b">
+                  <div class="flex justify-between items-center mb-2">
+                    <h2 class="font-bold text-sm text-gray-500">과제 멤버 ({{ members.length }})</h2>
+                    <button v-if="team.role !== 'owner'" class="text-xs text-red-600 underline" @click="leaveTeam">나가기</button>
+                  </div>
+                  <div v-if="team.role === 'owner'" class="bg-gray-50 border rounded p-3 text-sm">
+                    <div class="text-xs text-gray-500 mb-1">초대코드</div>
+                    <div class="flex items-center gap-2">
+                      <div class="flex-1 border border-teal-600 rounded px-2 py-1 text-center font-mono tracking-wider">{{ team.invite_code }}</div>
+                      <button class="text-xs border rounded px-2 py-1" @click="copyInviteCode">복사</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex-1 overflow-y-auto divide-y">
+                  <div v-for="m in members" :key="m.id" class="flex items-center gap-2 p-3">
+                    <div class="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-bold shrink-0">{{ m.email[0].toUpperCase() }}</div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm truncate">{{ m.email }}</div>
+                      <div class="text-xs text-gray-500">{{ m.role === 'owner' ? '★ owner' : 'member' }} · {{ formatJoinDate(m.created_at) }}</div>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </div>
 
           <div v-if="editingTask" class="fixed inset-0 bg-black/40 flex items-center justify-center z-40">
