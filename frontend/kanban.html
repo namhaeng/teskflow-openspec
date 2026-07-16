@@ -42,6 +42,13 @@
           inlineTitle: "",
           inlineAssignee: "",
           columns: COLUMNS,
+          chatOpen: false,
+          chatMessages: [],
+          chatContent: "",
+          chatCurrentUserId: null,
+          chatLastSince: null,
+          chatPollOk: true,
+          chatPollTimer: null,
         };
       },
       async mounted() {
@@ -57,6 +64,11 @@
         this.team = await Api.getTeam(this.teamId);
         this.members = await Api.getMembers(this.teamId);
         await this.loadTasks();
+        const me = await Api.me();
+        this.chatCurrentUserId = me.id;
+      },
+      beforeUnmount() {
+        clearInterval(this.chatPollTimer);
       },
       methods: {
         async loadTasks() {
@@ -158,19 +170,76 @@
             alert(err.message);
           }
         },
+        async toggleChat() {
+          this.chatOpen = !this.chatOpen;
+          if (this.chatOpen) {
+            await this.chatLoadInitial();
+            if (!this.chatPollTimer) {
+              this.chatPollTimer = setInterval(() => this.chatPoll(), 5000);
+            }
+          }
+        },
+        chatFormatTime(iso) {
+          return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+        },
+        async chatLoadInitial() {
+          const list = await Api.listMessages(this.teamId);
+          this.chatMessages = list;
+          this.chatLastSince = list.length ? list[list.length - 1].created_at : null;
+          this.chatScrollToBottom();
+        },
+        async chatPoll() {
+          if (!this.chatOpen) return;
+          try {
+            const list = await Api.listMessages(this.teamId, this.chatLastSince);
+            if (list.length) {
+              this.chatMessages.push(...list);
+              this.chatLastSince = list[list.length - 1].created_at;
+              this.chatScrollToBottom();
+            }
+            this.chatPollOk = true;
+          } catch (err) {
+            this.chatPollOk = false;
+          }
+        },
+        chatScrollToBottom() {
+          this.$nextTick(() => {
+            const el = this.$refs.chatMessagesEl;
+            if (el) el.scrollTop = el.scrollHeight;
+          });
+        },
+        async chatSend() {
+          const text = this.chatContent.trim();
+          if (!text || text.length > 1000) return;
+          try {
+            await Api.sendMessage(this.teamId, text);
+            this.chatContent = "";
+            await this.chatLoadInitial();
+          } catch (err) {
+            alert(err.message);
+          }
+        },
+        async chatDeleteMessage(id) {
+          try {
+            await Api.deleteMessage(id);
+            await this.chatLoadInitial();
+          } catch (err) {
+            alert(err.message);
+          }
+        },
       },
       template: `
         <template v-if="hasNoTeams">
+          <team-sidebar page-type="kanban" :active-team-id="null" @add="showAddModal = true" />
           <div class="flex-1 flex flex-col">
             <header class="shrink-0 bg-white border-b px-4 py-3 flex justify-between items-center">
-              <span class="font-bold text-teal-700">TaskFlow</span>
+              <span class="font-bold text-gray-800">과제 없음</span>
               <button class="text-teal-600 underline text-sm" @click="() => { clearToken(); location.href='/index.html'; }">로그아웃</button>
             </header>
             <main class="flex-1 flex flex-col items-center justify-center text-center">
               <div class="text-4xl mb-3">📋</div>
               <p class="font-bold mb-1">아직 참여 중인 과제가 없습니다</p>
-              <p class="text-sm text-gray-500 mb-4">새 과제를 만들거나 초대코드로 합류해보세요</p>
-              <button class="bg-teal-700 text-white rounded px-4 py-2 font-medium" @click="showAddModal = true">+ 새 과제 추가</button>
+              <p class="text-sm text-gray-500">왼쪽 "내 과제"에서 새 과제를 만들거나 합류해보세요</p>
             </main>
           </div>
           <add-team-modal v-if="showAddModal" @close="showAddModal = false" @created="showAddModal = true" />
@@ -247,7 +316,9 @@
 
               <aside class="hidden lg:flex flex-col h-full w-72 shrink-0 border-l bg-white overflow-y-auto">
                 <div class="p-4 border-b">
-                  <a :href="'/chat.html?team=' + teamId" class="w-full flex items-center justify-center gap-1.5 bg-teal-700 text-white rounded py-2 text-sm font-medium mb-3">💬 채팅</a>
+                  <button class="w-full flex items-center justify-center gap-1.5 bg-teal-700 text-white rounded py-2 text-sm font-medium mb-3" @click="toggleChat">
+                    {{ chatOpen ? '✕ 채팅 닫기' : '💬 채팅' }}
+                  </button>
                   <div class="flex justify-between items-center mb-2">
                     <h2 class="font-bold text-sm text-gray-500">과제 멤버 ({{ members.length }})</h2>
                     <button v-if="team.role !== 'owner'" class="text-xs text-red-600 underline" @click="leaveTeam">나가기</button>
@@ -313,6 +384,32 @@
           </div>
 
           <button class="md:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-teal-700 text-white text-2xl shadow-lg" @click="openInlineAdd(mobileCol)">+</button>
+
+          <div class="fixed top-0 right-0 h-full w-[200px] bg-white border-l shadow-lg z-30 flex flex-col transition-transform duration-300"
+               :class="chatOpen ? 'translate-x-0' : 'translate-x-full'">
+            <div class="shrink-0 flex justify-between items-center px-2 py-2 border-b">
+              <span class="font-bold text-xs">💬 채팅</span>
+              <button class="text-gray-400 text-lg leading-none" @click="chatOpen = false">&times;</button>
+            </div>
+            <div ref="chatMessagesEl" class="flex-1 overflow-y-auto p-2 space-y-2">
+              <div v-if="chatMessages.length === 0" class="text-center text-gray-400 text-xs py-6">
+                아직 대화가<br>없습니다
+              </div>
+              <div v-for="m in chatMessages" :key="m.id" class="group">
+                <div class="text-[10px] text-gray-400 truncate">{{ m.user_email.split('@')[0] }} · {{ chatFormatTime(m.created_at) }}</div>
+                <div class="flex items-start gap-1">
+                  <div class="flex-1 rounded px-1.5 py-1 text-xs break-words" :class="m.user_id === chatCurrentUserId ? 'bg-teal-700 text-white' : 'bg-gray-100'">{{ m.content }}</div>
+                  <button v-if="m.user_id === chatCurrentUserId" class="opacity-0 group-hover:opacity-100 text-red-500 text-[10px] shrink-0" @click="chatDeleteMessage(m.id)">🗑</button>
+                </div>
+              </div>
+            </div>
+            <div class="shrink-0 border-t p-2">
+              <textarea v-model="chatContent" rows="2" placeholder="메시지…" class="w-full border rounded px-1.5 py-1 text-xs mb-1"></textarea>
+              <button class="w-full bg-teal-700 text-white rounded py-1 text-xs font-medium disabled:opacity-50"
+                      :disabled="!chatContent.trim() || chatContent.length > 1000"
+                      @click="chatSend">전송</button>
+            </div>
+          </div>
 
           <add-team-modal v-if="showAddModal" @close="showAddModal = false" @created="showAddModal = true" />
         </template>
